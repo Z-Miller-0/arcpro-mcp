@@ -85,8 +85,13 @@ class Layout(object):
 
 
 class _Camera(object):
+    extent = None
+
     def setExtent(self, ext):
         self.extent = ext
+
+    def getExtent(self):
+        return self.extent or Extent()
 
 
 class MapView(object):
@@ -98,7 +103,7 @@ class MapView(object):
         return Extent()
 
     def exportToPNG(self, path, width=None, height=None, world_file=False):
-        assert not world_file, "world_file must not be set"
+        raise AssertionError("map views must be rendered via a temporary layout")
         with open(path, "wb") as fh:
             fh.write(b"\x89PNG\r\n\x1a\nfake-view")
 

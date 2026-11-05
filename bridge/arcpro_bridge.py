@@ -37,7 +37,7 @@ import urllib.request
 
 import arcpy
 
-BRIDGE_VERSION = "0.1.2"
+BRIDGE_VERSION = "0.1.3"
 DEFAULT_PORT = 18760
 STATE_DIR = os.path.join(os.path.expanduser("~"), ".arcpro_mcp")
 STATE_FILE = os.path.join(STATE_DIR, "bridge.json")
@@ -563,19 +563,27 @@ class Bridge(object):
         if layout:
             self._layout(layout).exportToPNG(path, resolution=int(resolution))
             return {"path": path, "source": "layout:" + layout}
+        # Map views are never exported directly: MapView.exportToPNG pads with black when
+        # the requested size differs from the on-screen tab. Instead render through a
+        # temporary layout at the exact size, using the open view's extent when there is one.
+        view = None
         if map is None and self.live:
-            view = self.aprx.activeView
-            if view is not None and hasattr(view, "exportToPNG") and hasattr(view, "camera"):
-                view.exportToPNG(path, width=int(width), height=int(height))
-                return {"path": path, "source": "active view"}
-        m = self._map(map)
-        view = self._view_for(m)
+            av = self.aprx.activeView
+            if av is not None and hasattr(av, "camera") and hasattr(av, "map"):
+                view = av
+                m = av.map
+        if view is None:
+            m = self._map(map)
+            view = self._view_for(m)
+        extent = None
         if view is not None:
-            view.exportToPNG(path, width=int(width), height=int(height))
-            return {"path": path, "source": "map view:" + m.name}
-        return self._snapshot_via_temp_layout(m, path, width, height, resolution)
+            try:
+                extent = view.camera.getExtent()
+            except Exception:
+                extent = None
+        return self._snapshot_via_temp_layout(m, path, width, height, resolution, extent)
 
-    def _snapshot_via_temp_layout(self, m, path, width, height, resolution):
+    def _snapshot_via_temp_layout(self, m, path, width, height, resolution, extent=None):
         """Render a map with no open view: temporary layout + map frame, then delete it."""
         if not hasattr(self.aprx, "createLayout"):
             raise BridgeError("Snapshots of maps without an open view need ArcGIS Pro 3.0+.")
@@ -585,7 +593,7 @@ class Bridge(object):
         try:
             mf = lyt.createMapFrame(arcpy.Extent(0, 0, w_in, h_in), m, "snapshot")
             ext = None
-            for lyr in m.listLayers():
+            for lyr in ([] if extent is not None else m.listLayers()):
                 if getattr(lyr, "isBasemapLayer", False) or getattr(lyr, "isGroupLayer", False):
                     continue
                 if not (lyr.isFeatureLayer or lyr.isRasterLayer):
@@ -601,7 +609,9 @@ class Bridge(object):
                 else:
                     ext = [min(ext[0], e.XMin), min(ext[1], e.YMin),
                            max(ext[2], e.XMax), max(ext[3], e.YMax), ext[4]]
-            if ext is not None:
+            if extent is not None:
+                mf.camera.setExtent(extent)
+            elif ext is not None:
                 mf.camera.setExtent(arcpy.Extent(ext[0], ext[1], ext[2], ext[3],
                                                  spatial_reference=ext[4]))
             else:
@@ -612,7 +622,8 @@ class Bridge(object):
                 self.aprx.deleteItem(lyt)
             except Exception:
                 pass
-        return {"path": path, "source": "map:" + m.name + " (temporary layout)"}
+        how = "current view extent" if extent is not None else "zoomed to data"
+        return {"path": path, "source": "map:%s (%s)" % (m.name, how)}
 
     def export_layout_pdf(self, path, layout=None, resolution=300):
         lyt = self._layout(layout)

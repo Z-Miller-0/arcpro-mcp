@@ -259,3 +259,20 @@ def test_layers_outside_active_map(env):
         fa.STRICT["on"] = False
         fa.STRICT["gp_rejects_layer_objects"] = False
         env["server"].bridge.aprx.listMaps()[0].listLayers()[0].definitionQuery = ""
+
+
+
+def test_snapshot_uses_view_extent(env):
+    """Real-Pro bug: direct MapView export padded the image with black bars."""
+    from arcpro_mcp import client
+    aprx = env["server"].bridge.aprx
+    m = aprx.listMaps()[0]
+    aprx.activeView = None
+    m.openView()
+    import fake_arcpy as fa
+    aprx.activeView.camera.setExtent(fa.Extent(1, 2, 3, 4))
+    res = client.call("export_image")
+    assert res["source"] == "map:US Magnet Stack (current view extent)"
+    res = client.call("export_image", map="US Magnet Stack")
+    assert "current view extent" in res["source"]
+    assert [l.name for l in aprx.listLayouts()] == ["Main Layout"]
