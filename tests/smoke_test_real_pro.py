@@ -110,6 +110,7 @@ def main():
         if img and img.get("path") and os.path.exists(img["path"]):
             results[-1]["bytes"] = os.path.getsize(img["path"])
             results[-1]["source"] = img.get("source")
+            results[-1]["frame"] = img.get("frame")
             print("       source: %s, %d bytes" % (img.get("source"), results[-1]["bytes"]))
             keep = os.path.join(HERE, "smoke_snapshot_%d.png" % len(results))
             shutil.move(img["path"], keep)
@@ -122,10 +123,10 @@ def main():
         os.remove(img["path"])
     step("tool_help", "tool_help", tool="analysis.Buffer")
     step("run_geoprocessing (Buffer to memory)", "run_geoprocessing",
-         tool="analysis.Buffer", args=["smoke_states", r"memory\smoke_buf", "10 Kilometers"],
+         tool="analysis.Buffer", args=["smoke_states", r"memory\smoke_buf_%d" % int(time.time()), "10 Kilometers"],
          add_outputs_to_map=False, map=TEST_MAP)
     step("run_geoprocessing bad param (expect error)", "run_geoprocessing", expect_error=True,
-         tool="analysis.Buffer", args=["smoke_states", r"memory\smoke_buf2", "not a distance"])
+         tool="analysis.Buffer", args=["smoke_states", r"memory\smoke_buf2_%d" % int(time.time()), "not a distance"])
     step("search_portal", "search_portal", query="rare earth", item_type="Feature Service",
          limit=5)
     step("unknown layer (expect error)", "describe_layer", expect_error=True, map=TEST_MAP,

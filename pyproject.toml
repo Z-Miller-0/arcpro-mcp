@@ -1,6 +1,6 @@
 [project]
 name = "arcpro-mcp"
-version = "0.1.3"
+version = "0.1.4"
 description = "MCP server that lets Claude work in ArcGIS Pro through a small bridge script"
 readme = "README.md"
 requires-python = ">=3.10"

@@ -62,7 +62,7 @@ print(hits)
 exec(open(hits[0]).read())
 ```
 
-You should see `[arcpro-mcp] bridge 0.1.3 listening on 127.0.0.1:18760 (live mode ...)`.
+You should see `[arcpro-mcp] bridge 0.1.4 listening on 127.0.0.1:18760 (live mode ...)`.
 Run it again each time you reopen Pro.
 
 ### 5. Try it
@@ -126,7 +126,7 @@ same .aprx open in Pro at the same time.
 
 ## Status
 
-Version 0.1.3. Smoke-tested against ArcGIS Pro (Python 3.11) in live mode, plus 17
+Version 0.1.4. Smoke-tested against ArcGIS Pro (Python 3.11) in live mode, plus 17
 automated tests against a simulated arcpy. Errors come back to Claude with the
 Python traceback, which makes them quick to fix.
 

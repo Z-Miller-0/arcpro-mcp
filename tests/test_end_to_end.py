@@ -276,3 +276,27 @@ def test_snapshot_uses_view_extent(env):
     res = client.call("export_image", map="US Magnet Stack")
     assert "current view extent" in res["source"]
     assert [l.name for l in aprx.listLayouts()] == ["Main Layout"]
+
+
+
+def test_snapshot_frame_pinned_to_page(env):
+    """Real-Pro bug: temp-layout map frame came out shifted (blank band top/left)."""
+    import fake_arcpy as fa
+    aprx = env["server"].bridge.aprx
+    made = []
+    orig = aprx.createLayout
+
+    def spy(*a, **k):
+        lyt = orig(*a, **k)
+        made.append(lyt)
+        return lyt
+
+    aprx.createLayout = spy
+    try:
+        from arcpro_mcp import client
+        client.call("export_image", map="US Magnet Stack", width=960, height=480)
+    finally:
+        del aprx.createLayout
+    mf = made[0].frame
+    assert (mf.elementPositionX, mf.elementPositionY) == (0, 0)
+    assert (mf.elementWidth, mf.elementHeight) == (10.0, 5.0)  # 960x480 px at 96 dpi

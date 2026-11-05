@@ -123,6 +123,8 @@ class MapFrame(object):
     def __init__(self, m):
         self.map = m
         self.camera = _Camera()
+        self.elementPositionX, self.elementPositionY = 2.8, -1.56  # the real-Pro shift
+        self.elementWidth = self.elementHeight = 3.0
 
     def getLayerExtent(self, lyr, selection_only=False, symbolized=True):
         return Extent()
@@ -161,7 +163,10 @@ class ArcGISProject(object):
 
     def createLayout(self, w, h, units, name=None):
         lyt = Layout(name or "Layout")
-        lyt.createMapFrame = lambda geom, m, name=None: MapFrame(m)
+        def create(geom, m, name=None):
+            lyt.frame = MapFrame(m)
+            return lyt.frame
+        lyt.createMapFrame = create
         self._layouts.append(lyt)
         return lyt
 
@@ -270,7 +275,20 @@ management = types.SimpleNamespace(GetCount=GetCount, MakeFeatureLayer=MakeFeatu
 
 
 analysis = types.SimpleNamespace(Buffer=Buffer)
-env = types.SimpleNamespace(addOutputsToMap=True)
+env = types.SimpleNamespace(addOutputsToMap=True, overwriteOutput=False)
+
+
+class Point(object):
+    def __init__(self, x, y):
+        self.X, self.Y = x, y
+
+
+def Array(points):
+    return list(points)
+
+
+def Polygon(arr):
+    return ("polygon", arr)
 
 
 def ListFields(lyr):

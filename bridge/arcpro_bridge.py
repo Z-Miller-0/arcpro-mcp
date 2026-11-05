@@ -37,7 +37,7 @@ import urllib.request
 
 import arcpy
 
-BRIDGE_VERSION = "0.1.3"
+BRIDGE_VERSION = "0.1.4"
 DEFAULT_PORT = 18760
 STATE_DIR = os.path.join(os.path.expanduser("~"), ".arcpro_mcp")
 STATE_FILE = os.path.join(STATE_DIR, "bridge.json")
@@ -483,7 +483,7 @@ class Bridge(object):
         return func, "%s_%s" % (name, toolbox)
 
     def run_geoprocessing(self, tool, args=None, kwargs=None, add_outputs_to_map=True,
-                          map=None):
+                          map=None, overwrite=False):
         func, _ = self._resolve_tool(tool)
         args = list(args or [])
         kwargs = dict(kwargs or {})
@@ -519,15 +519,21 @@ class Bridge(object):
             return func(*a, **k)
 
         prev = getattr(arcpy.env, "addOutputsToMap", None)
+        prev_ow = getattr(arcpy.env, "overwriteOutput", None)
         note = None
         try:
             if prev is not None:
                 arcpy.env.addOutputsToMap = bool(add_outputs_to_map)
+            if prev_ow is not None:
+                arcpy.env.overwriteOutput = bool(overwrite)
             try:
                 result = run("layer")
             except arcpy.ExecuteError:
                 msgs = arcpy.GetMessages(2)
                 if not used or "000732" not in msgs:
+                    if "000725" in msgs:
+                        msgs += ("\nThe output already exists. Pick a new output name, or pass "
+                                 "overwrite=true if the user wants it replaced.")
                     raise BridgeError("Geoprocessing failed:\n" + msgs)
                 del used[:]
                 try:
@@ -539,6 +545,8 @@ class Bridge(object):
         finally:
             if prev is not None:
                 arcpy.env.addOutputsToMap = prev
+            if prev_ow is not None:
+                arcpy.env.overwriteOutput = prev_ow
             for tmp in temps:
                 try:
                     arcpy.management.Delete(tmp)
@@ -591,7 +599,24 @@ class Bridge(object):
         w_in, h_in = int(width) / dpi, int(height) / dpi
         lyt = self.aprx.createLayout(w_in, h_in, "INCH", "_arcpro_mcp_snapshot")
         try:
-            mf = lyt.createMapFrame(arcpy.Extent(0, 0, w_in, h_in), m, "snapshot")
+            frame = arcpy.Polygon(arcpy.Array([arcpy.Point(0, 0), arcpy.Point(0, h_in),
+                                               arcpy.Point(w_in, h_in), arcpy.Point(w_in, 0),
+                                               arcpy.Point(0, 0)]))
+            mf = lyt.createMapFrame(frame, m, "snapshot")
+            # Pin the frame to the page explicitly: in the real-Pro test the frame came out
+            # shifted (blank band on the top and left) when only the geometry was given.
+            for attr, val in (("elementWidth", w_in), ("elementHeight", h_in),
+                              ("elementPositionX", 0), ("elementPositionY", 0)):
+                try:
+                    setattr(mf, attr, val)
+                except Exception:
+                    pass
+            frame_info = {"page_in": [round(w_in, 3), round(h_in, 3)]}
+            for attr in ("elementPositionX", "elementPositionY", "elementWidth", "elementHeight"):
+                try:
+                    frame_info[attr] = round(float(getattr(mf, attr)), 3)
+                except Exception:
+                    pass
             ext = None
             for lyr in ([] if extent is not None else m.listLayers()):
                 if getattr(lyr, "isBasemapLayer", False) or getattr(lyr, "isGroupLayer", False):
@@ -623,7 +648,7 @@ class Bridge(object):
             except Exception:
                 pass
         how = "current view extent" if extent is not None else "zoomed to data"
-        return {"path": path, "source": "map:%s (%s)" % (m.name, how)}
+        return {"path": path, "source": "map:%s (%s)" % (m.name, how), "frame": frame_info}
 
     def export_layout_pdf(self, path, layout=None, resolution=300):
         lyt = self._layout(layout)

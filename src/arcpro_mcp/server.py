@@ -205,7 +205,8 @@ async def remove_layer(layer: str, map: str | None = None) -> dict:
 @mcp.tool(annotations=DESTRUCTIVE)
 async def run_geoprocessing(tool: str, args: list[Any] | None = None,
                             kwargs: dict[str, Any] | None = None,
-                            add_outputs_to_map: bool = True, map: str | None = None) -> dict:
+                            add_outputs_to_map: bool = True, map: str | None = None,
+                            overwrite: bool = False) -> dict:
     """Run any ArcGIS geoprocessing tool, e.g. Buffer, Clip, Spatial Join, Summary Statistics.
 
     Call tool_help first for the parameter order. Some tools overwrite or delete data, so
@@ -218,9 +219,10 @@ async def run_geoprocessing(tool: str, args: list[Any] | None = None,
         add_outputs_to_map: Add outputs to the active map.
         map: Map whose layer names the args refer to (defaults to the active map). Layer
             names are passed to the tool as the actual layers, so filters apply.
+        overwrite: Replace existing outputs. Only set this when the user asked to overwrite.
     """
     return await _call("run_geoprocessing", tool=tool, args=args, kwargs=kwargs,
-                       add_outputs_to_map=add_outputs_to_map, map=map)
+                       add_outputs_to_map=add_outputs_to_map, map=map, overwrite=overwrite)
 
 
 @mcp.tool(annotations=EDIT)
