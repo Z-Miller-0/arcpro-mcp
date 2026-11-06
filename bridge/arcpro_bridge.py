@@ -139,10 +139,12 @@ def _norm(path):
     return p.rstrip("/").lower()
 
 
+def _is_memory(value):
+    return str(value).lower().startswith(("memory\\", "memory/", "in_memory\\", "in_memory/"))
+
+
 def _is_path(value):
-    v = str(value)
-    return bool(re.match(r"^([A-Za-z]:[\\/]|\\\\|/)", v)) or v.lower().startswith(
-        ("memory\\", "memory/", "in_memory\\", "in_memory/"))
+    return bool(re.match(r"^([A-Za-z]:[\\/]|\\\\|/)", str(value))) or _is_memory(value)
 
 
 def _join(base, *names):
@@ -901,8 +903,9 @@ class Bridge(object):
                 used = ["(layer %r in the current map)" % t]
             locked = False
             if not used:
+                # TestSchemaLock is False for every memory dataset in Pro 3.5, even a new one.
                 test = getattr(arcpy, "TestSchemaLock", None)
-                if test is not None and _is_path(path):
+                if test is not None and _is_path(path) and not _is_memory(path):
                     try:
                         locked = arcpy.Exists(path) and not test(path)
                     except Exception:

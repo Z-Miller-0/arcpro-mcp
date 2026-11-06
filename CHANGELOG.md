@@ -16,7 +16,8 @@ crashed twice.
   CalculateGeometryAttributes, TruncateTable and the index/GlobalID tools when a map in the
   project draws the target dataset or `TestSchemaLock` says something else holds a lock.
   Override with `unsafe_schema_change=true`. Lock errors (000317, 000464, 000496) now say
-  not to retry.
+  not to retry. The `TestSchemaLock` check is skipped for `memory\` datasets, because it
+  returns False for all of them in Pro 3.5; the check for layers drawing them still applies.
 - **Clearer crash message.** If the connection drops mid-command, the client says Pro may
   have crashed during that command, instead of "bridge is not running".
 - **Easier startup.** One-line start command (`exec(...); start(allow_exec=...)`) in the

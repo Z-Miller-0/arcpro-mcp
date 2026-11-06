@@ -417,6 +417,7 @@ conversion = types.SimpleNamespace(ExportFeatures=ExportFeatures)
 analysis = types.SimpleNamespace(Buffer=Buffer)
 env = types.SimpleNamespace(addOutputsToMap=True, overwriteOutput=False, workspace=None)
 LOCKED = set()  # dataset paths TestSchemaLock reports as locked
+MEMORY_PREFIXES = ("memory/", "in_memory/")
 
 
 class Point(object):
@@ -448,11 +449,14 @@ def Describe(obj):
 
 def Exists(path):
     p = str(path).replace("\\", "/")
-    return p in DATASETS or p == "C:/GIS/cm.gdb"
+    return p in DATASETS or p == "C:/GIS/cm.gdb" or p.lower().startswith(MEMORY_PREFIXES)
 
 
 def TestSchemaLock(path):
-    return str(path).replace("\\", "/") not in LOCKED
+    p = str(path).replace("\\", "/")
+    if p.lower().startswith(MEMORY_PREFIXES):
+        return False  # real Pro 3.5: False for every memory dataset, even an unused new one
+    return p not in LOCKED
 
 
 def _in_ws(feature_dataset=None):

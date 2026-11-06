@@ -395,6 +395,14 @@ def test_schema_guard(env):
     assert [c[0] for c in fa.SCHEMA_CALLS] == ["CalculateField", "Delete", "AddField"]
 
 
+def test_schema_guard_allows_undrawn_memory_datasets(env):
+    """Real Pro 3.5: TestSchemaLock is False for every memory dataset, so it proves nothing."""
+    for path in ("memory\\smoke_log", "memory/smoke_log", "in_memory\\smoke_log"):
+        payload(call_tool(env["mcp"], "run_geoprocessing",
+                          {"tool": "management.AddField", "args": [path, "layer", "TEXT"],
+                           "add_outputs_to_map": False}))
+
+
 def test_lock_error_says_do_not_retry(env):
     r = call_tool(env["mcp"], "run_geoprocessing",
                   {"tool": "conversion.ExportFeatures", "args": ["C:/GIS/cm.gdb/unused_fc", "out"]})
