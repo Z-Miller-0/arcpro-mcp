@@ -12,6 +12,7 @@ import os
 import shutil
 import socket
 import sys
+import tempfile
 import time
 import traceback
 
@@ -84,8 +85,22 @@ def main():
                     step("field_summary (existing)", "field_summary", map=first, layer=name,
                          field=f[0])
 
+    info = info or {}
+    if info.get("default_geodatabase"):
+        step("list_workspace (default gdb)", "list_workspace", include_counts=False)
+    step("describe_url (states service, nothing added)", "describe_url", url=STATES_URL)
+    step("describe_url retired URL (expect error)", "describe_url", expect_error=True,
+         url=RETIRED_URL)
+
     if TEST_MAP not in existing:
         step("create_map", "create_map", name=TEST_MAP)
+    empty_map = TEST_MAP + "_empty"
+    if empty_map not in existing:
+        r = step("create_map without basemap", "create_map", name=empty_map,
+                 include_basemap=False)
+        if r and r.get("layer_count"):
+            results[-1]["ok"] = False
+            print("       FAIL: the map still has %s layers" % r["layer_count"])
     step("add_layer retired URL gives clear error (expect error)", "add_layer",
          expect_error=True, map=TEST_MAP, source=RETIRED_URL, name="smoke_retired")
     step("add_layer (USA states service)", "add_layer", map=TEST_MAP, source=STATES_URL,
@@ -121,6 +136,32 @@ def main():
     if img and img.get("path") and os.path.exists(img["path"]):
         print("       source: %s" % img.get("source"))
         os.remove(img["path"])
+    img = step("export_image (framed on one layer)", "export_image", map=TEST_MAP,
+               layer="smoke_states")
+    if img and img.get("path") and os.path.exists(img["path"]):
+        print("       source: %s, framed_on: %s" % (img.get("source"), img.get("framed_on")))
+        keep = os.path.join(HERE, "smoke_snapshot_%d.png" % len(results))
+        shutil.move(img["path"], keep)
+    step("schema guard refuses AddField on a drawn layer (expect error)", "run_geoprocessing",
+         expect_error=True, tool="management.AddField", args=["smoke_states", "x", "TEXT"],
+         map=TEST_MAP)
+    tbl = "smoke_log_%d" % int(time.time())
+    step("CreateTable in memory", "run_geoprocessing", tool="management.CreateTable",
+         args=["memory", tbl], add_outputs_to_map=False)
+    step("AddField on a dataset no map draws", "run_geoprocessing", tool="management.AddField",
+         args=["memory\\" + tbl, "layer", "TEXT"], add_outputs_to_map=False)
+    step("AddField (date)", "run_geoprocessing", tool="management.AddField",
+         args=["memory\\" + tbl, "accessed", "DATE"], add_outputs_to_map=False)
+    step("insert_rows", "insert_rows", table="memory\\" + tbl,
+         rows=[{"layer": "L1", "accessed": "2026-11-05"}, {"layer": "L2"}])
+    q = step("query_layer on a table path", "query_layer", layer="memory\\" + tbl)
+    if q is not None and q.get("row_count") != 2:
+        results[-1]["ok"] = False
+        print("       FAIL: expected 2 rows, got %s" % q.get("row_count"))
+    backup = os.path.join(tempfile.mkdtemp(), "new_folder", "smoke_copy.aprx")
+    step("save_project copy_to a new folder", "save_project", copy_to=backup)
+    if os.path.exists(backup):
+        shutil.rmtree(os.path.dirname(os.path.dirname(backup)), ignore_errors=True)
     step("tool_help", "tool_help", tool="analysis.Buffer")
     step("run_geoprocessing (Buffer to memory)", "run_geoprocessing",
          tool="analysis.Buffer", args=["smoke_states", r"memory\smoke_buf_%d" % int(time.time()), "10 Kilometers"],
@@ -139,7 +180,8 @@ def main():
     with open(out, "w") as fh:
         json.dump({"bridge": st, "results": results}, fh, indent=2, default=str)
     print("Report: " + out)
-    print("You can delete the '%s' map from the project (it was not saved)." % TEST_MAP)
+    print("You can delete the '%s' and '%s_empty' maps from the project (it was not saved)."
+          % (TEST_MAP, TEST_MAP))
 
 
 if __name__ == "__main__":
