@@ -1,0 +1,24 @@
+# Runs the unit tests, which use a simulated arcpy and need no ArcGIS Pro. Real-Pro checks are
+# in tests/smoke_test_real_pro.py and are run by hand. Windows, because the bridge only runs there.
+name: tests
+
+on:
+  push:
+  pull_request:
+
+# The tests only read the code.
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      # Pinned to exact commits, so a change upstream cannot alter what runs here.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86  # v5.4.2
+      - name: Run the tests
+        run: uv run --frozen --extra test pytest -q
