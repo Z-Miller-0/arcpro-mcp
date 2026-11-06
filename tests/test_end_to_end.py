@@ -1,9 +1,6 @@
 """End-to-end test: MCP client -> arcpro-mcp server -> TCP bridge -> fake arcpy."""
 
-import importlib
 import json
-import os
-import sys
 from pathlib import Path
 
 import anyio
@@ -11,22 +8,6 @@ import pytest
 
 HERE = Path(__file__).parent
 ROOT = HERE.parent
-
-
-@pytest.fixture(scope="module")
-def env(tmp_path_factory):
-    tmp = tmp_path_factory.mktemp("state")
-    state = tmp / "bridge.json"
-    os.environ["ARCPRO_MCP_STATE"] = str(state)
-    sys.path[:0] = [str(HERE), str(ROOT / "bridge"), str(ROOT / "src")]
-    import fake_arcpy
-    sys.modules["arcpy"] = fake_arcpy
-    bridge = importlib.import_module("arcpro_bridge")
-    bridge.STATE_DIR, bridge.STATE_FILE = str(tmp), str(state)
-    server = bridge.start("CURRENT", port=0, allow_exec=False, background=True)
-    from arcpro_mcp import server as mcp_server
-    yield {"bridge": bridge, "server": server, "mcp": mcp_server.mcp, "state": state}
-    bridge.stop()
 
 
 def call_tool(mcp, name, args=None):
@@ -216,6 +197,9 @@ def test_add_layer_service_check(env):
     srv = http.server.HTTPServer(("127.0.0.1", 0), H)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     base = "http://127.0.0.1:%d" % srv.server_address[1]
+    import fake_arcpy as fa
+    original = fa.GetActivePortalURL
+    fa.GetActivePortalURL = lambda: base + "/"  # the signed-in portal may be a private host
     try:
         bad = call_tool(env["mcp"], "add_layer", {"source": base + "/retired/FeatureServer/0"})
         assert bad.isError and "499" in bad.content[0].text and "search_arcgis_online" in bad.content[0].text
@@ -224,6 +208,7 @@ def test_add_layer_service_check(env):
         assert ok["added"]["name"] == "svc"
         payload(call_tool(env["mcp"], "remove_layer", {"layer": "svc"}))
     finally:
+        fa.GetActivePortalURL = original
         srv.shutdown()
 
 
@@ -371,7 +356,7 @@ def test_schema_guard(env):
         r = gp("management.AddField", [target, "src", "TEXT"])
         assert r.isError and "Refused" in r.content[0].text, target
         assert "US Magnet Stack: REE Deposits" in r.content[0].text
-        assert "unsafe_schema_change" in r.content[0].text
+        assert "allow_exec" in r.content[0].text
     r = gp("management.JoinField", kwargs={"in_data": "REE Deposits", "in_field": "NAME",
                                             "join_table": "x", "join_field": "NAME"})
     assert r.isError and "adds joined fields" in r.content[0].text
@@ -379,19 +364,26 @@ def test_schema_guard(env):
     assert r.isError and "Magnet Plants" in r.content[0].text
     assert fa.SCHEMA_CALLS == []
     # filling an existing field is a data edit; a new field is a schema change
-    payload(gp("management.CalculateField", ["REE Deposits", "TONS", "0"]))
-    r = gp("management.CalculateField", ["REE Deposits", "NEW_FIELD", "0"])
+    payload(gp("management.CalculateField", ["REE Deposits", "TONS", "0", "ARCADE"]))
+    r = gp("management.CalculateField", ["REE Deposits", "NEW_FIELD", "0", "ARCADE"])
     assert r.isError and "adds a new field" in r.content[0].text
     # datasets no map draws are fine, unless something else holds a lock
     payload(gp("management.Delete", ["C:/GIS/cm.gdb/unused_fc"]))
     fa.LOCKED.add("C:/GIS/cm.gdb/unused_fc")
     try:
         r = gp("management.AddField", ["C:/GIS/cm.gdb/unused_fc", "f", "TEXT"])
-        assert r.isError and "locked by another process" in r.content[0].text
+        assert r.isError and "schema lock" in r.content[0].text
     finally:
         fa.LOCKED.clear()
-    # explicit override
-    payload(gp("management.AddField", ["REE Deposits", "src", "TEXT"], unsafe_schema_change=True))
+    # the override needs trusted mode, which only the user can turn on, in Pro
+    r = gp("management.AddField", ["REE Deposits", "src", "TEXT"], unsafe_schema_change=True)
+    assert r.isError and "allow_exec" in r.content[0].text
+    env["server"].bridge.allow_exec = True
+    try:
+        payload(gp("management.AddField", ["REE Deposits", "src", "TEXT"],
+                   unsafe_schema_change=True))
+    finally:
+        env["server"].bridge.allow_exec = False
     assert [c[0] for c in fa.SCHEMA_CALLS] == ["CalculateField", "Delete", "AddField"]
 
 
@@ -494,6 +486,7 @@ def test_tables(env):
 
 def test_list_workspace(env):
     """Backlog 5."""
+    env["server"].bridge.removed_sources.clear()  # layers removed by earlier tests
     w = payload(call_tool(env["mcp"], "list_workspace"))
     by = {i["name"]: i for i in w["items"]}
     assert w["workspace"] == "C:/GIS/cm.gdb"
@@ -547,17 +540,18 @@ def test_describe_url(env):
         if path.endswith("/FeatureServer"):
             return {"serviceDescription": "x", "layers": [{"id": 0, "name": "REE",
                                                           "geometryType": "esriGeometryPoint"}]}
-        if "/sharing/rest/content/items/abc123" in path:
-            return {"id": "abc123", "title": "Rare Earth Occurrences", "owner": "mconway",
+        if "/sharing/rest/content/items/" + ITEM in path:
+            return {"id": ITEM, "title": "Rare Earth Occurrences", "owner": "mconway",
                     "type": "Feature Service", "created": 1700000000000,
                     "url": BASE[0] + "/svc/FeatureServer"}
         return {"error": {"code": 400, "message": "Invalid URL"}}
 
+    ITEM = "a" * 32
     BASE = [None]
     srv, base = _json_server(routes)
     BASE[0] = base
     import fake_arcpy as fa
-    fa.GetActivePortalURL = lambda: base + "/"
+    fa.GetActivePortalURL = lambda: base + "/"  # the signed-in portal may be a private host
     try:
         d = payload(call_tool(env["mcp"], "describe_url",
                               {"url": base + "/svc/FeatureServer/0"}))
@@ -567,7 +561,7 @@ def test_describe_url(env):
         assert d["layer"]["spatial_reference_wkid"] == 4326
         root = payload(call_tool(env["mcp"], "describe_url", {"url": base + "/svc/FeatureServer"}))
         assert root["service"]["layers"][0]["name"] == "REE" and "Append" in root["note"]
-        it = payload(call_tool(env["mcp"], "describe_url", {"item_id": "abc123"}))
+        it = payload(call_tool(env["mcp"], "describe_url", {"item_id": ITEM}))
         assert it["item"]["owner"] == "mconway" and it["item"]["created"] == "2023-11-14"
         assert "service" in it
         bad = call_tool(env["mcp"], "describe_url", {"url": base + "/wrong"})

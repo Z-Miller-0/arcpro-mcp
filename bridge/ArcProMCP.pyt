@@ -42,7 +42,9 @@ class StartBridge(object):
         self.canRunInBackground = False
 
     def getParameterInfo(self):
-        allow = arcpy.Parameter(displayName="Allow run_arcpy (arbitrary Python)",
+        allow = arcpy.Parameter(displayName="Trusted mode: allow run_arcpy, Python tools, "
+                                            "deletes outside the project (use only for a job "
+                                            "that needs it)",
                                 name="allow_exec", datatype="GPBoolean",
                                 parameterType="Optional", direction="Input")
         allow.value = False
@@ -53,7 +55,7 @@ class StartBridge(object):
 
     def execute(self, parameters, messages):
         allow = bool(parameters[0].value)
-        port = int(parameters[1].value or 18760)
+        port = 18760 if parameters[1].value is None else int(parameters[1].value)
         mod = _bridge()
         server = mod.start("CURRENT", port=port, allow_exec=allow, background=True, quiet=True)
         arcpy.AddMessage("arcpro-mcp bridge %s listening on 127.0.0.1:%s, run_arcpy %s, "
@@ -76,9 +78,7 @@ class StopBridge(object):
         if server is None:
             arcpy.AddMessage("The bridge is not running.")
             return
-        server.shutdown()
-        server.server_close()
-        builtins._arcpro_mcp_bridge = None
+        _bridge().stop()  # also removes the state file
         arcpy.AddMessage("arcpro-mcp bridge stopped.")
 
 
