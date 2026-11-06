@@ -7,3 +7,5 @@ dist/
 build/
 tests/smoke_report.json
 tests/smoke_snapshot_*.png
+# metadata ArcGIS Pro writes next to a toolbox when it loads it
+bridge/*.pyt.xml
