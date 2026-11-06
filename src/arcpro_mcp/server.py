@@ -166,6 +166,11 @@ async def snapshot_map(map: str | None = None, layout: str | None = None,
     res = await _call("export_image", map=map, layout=layout, layer=layer,
                       use_view_extent=use_view_extent, width=width, height=height,
                       resolution=96, timeout=timeout)
+    if "png_base64" not in res:
+        raise RuntimeError(
+            "The bridge running in ArcGIS Pro is older than this server and does not return "
+            "images the same way. Ask the user to restart the bridge from the same arcpro-mcp "
+            "folder as this server.")
     data = base64.b64decode(res["png_base64"])
     if not data.startswith(b"\x89PNG\r\n\x1a\n"):
         raise RuntimeError("The bridge did not return a PNG image.")

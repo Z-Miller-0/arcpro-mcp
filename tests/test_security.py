@@ -566,6 +566,18 @@ def test_snapshot_returns_bytes_and_leaves_no_file(env):
     assert base64.b64decode(res["png_base64"]).startswith(b"\x89PNG")
 
 
+def test_snapshot_explains_an_older_bridge(env):
+    """Seen in real use: mixing versions gave only the error 'path'."""
+    bridge = env["server"].bridge
+    original = bridge.commands["export_image"]
+    bridge.commands["export_image"] = lambda **k: {"path": "C:/x.png", "source": "old bridge"}
+    try:
+        res = call_tool(env["mcp"], "snapshot_map")
+    finally:
+        bridge.commands["export_image"] = original
+    assert res.isError and "older than this server" in res.content[0].text
+
+
 def test_save_sweeps_leftover_snapshot_layouts(env):
     aprx = env["server"].bridge.aprx
     aprx.createLayout(1, 1, "INCH", "_arcpro_mcp_snapshot")
