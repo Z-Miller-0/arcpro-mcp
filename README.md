@@ -257,7 +257,7 @@ stored in `%USERPROFILE%\.arcpro_mcp\bridge.json`.
 ## Status
 
 Version 0.4.0. The automated tests run against a simulated arcpy, and the smoke test against real
-ArcGIS Pro 3.5 (Python 3.11). Errors come back to Claude with the Python traceback, which makes
+ArcGIS Pro 3.5 and 3.7.3 (all 277 checks pass on 3.7.3). Errors come back to Claude with the Python traceback, which makes
 them quick to fix. See [CHANGELOG.md](CHANGELOG.md).
 
 Run the tests: `uv run --extra test pytest`.

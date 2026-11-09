@@ -141,6 +141,26 @@ def security_steps(info):
     step("refused: sa.RasterCalculator", "run_geoprocessing", expect_error=True,
          tool="sa.RasterCalculator", args=[["x"], ["y"], "x"])
 
+    print("\n--- security: found reviewing Pro 3.7.3 (refused before anything runs)")
+    for tool, args in (
+            ("management.LoadDataToPreview", ["x", "C:/x"]),
+            ("management.BatchUpdateFields", ["x", "memory/x"]),
+            ("management.AnalyzeToolsForPro", ["x"]),
+            ("management.GenerateRasterCollection", ["x", "y"]),
+            ("management.GenerateTableFromRasterFunction", ["x", "y"]),
+            ("ddd.ClassifyPointCloudUsingTrainedModel", ["x", "y"]),
+            ("geoai.PredictUsingAutoML", ["x", "y"])):
+        step("refused: %s" % tool, "run_geoprocessing", expect_error=True, expect_text="Refused",
+             tool=tool, args=args)
+    for label, value in (("a .py file", "C:/x/calc.py"), ("a model file", "C:/x/m.dlpk"),
+                         ("a PythonAdapter raster function", '{"type": "PythonAdapter"}')):
+        step("refused: %s in any tool's parameters" % label, "run_geoprocessing",
+             expect_error=True, expect_text="Python or model file",
+             tool="management.CopyFeatures", args=["x", "memory\\y"], kwargs={"config_keyword": value})
+    step("refused: expression in MatchLayerSymbologyToAStyle", "run_geoprocessing",
+         expect_error=True, expect_text="field name", tool="management.MatchLayerSymbologyToAStyle",
+         args=["x", "__import__('os').getpid()", "y"])
+
     print("\n--- security: sign-in token and URLs")
     seen = []
 
