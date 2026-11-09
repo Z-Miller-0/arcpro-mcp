@@ -27,3 +27,6 @@ jobs:
         run: |
           uv build
           uv run --frozen python -c "import glob, sys, zipfile; names = zipfile.ZipFile(glob.glob('dist/*.whl')[0]).namelist(); missing = [n for n in ('arcpro_mcp/bridge/arcpro_bridge.py', 'arcpro_mcp/bridge/ArcProMCP.pyt') if n not in names]; sys.exit('wheel is missing %s' % missing if missing else 0)"
+      # The same check PyPI's upload runs, so a metadata problem shows up before release.
+      - name: Check the package metadata
+        run: uvx --from twine==7.0.0 --with packaging==26.2 twine check --strict dist/*

@@ -32,6 +32,9 @@ jobs:
         run: |
           uv build
           uv run --frozen python -c "import glob, sys, zipfile; names = zipfile.ZipFile(glob.glob('dist/*.whl')[0]).namelist(); missing = [n for n in ('arcpro_mcp/bridge/arcpro_bridge.py', 'arcpro_mcp/bridge/ArcProMCP.pyt') if n not in names]; sys.exit('wheel is missing %s' % missing if missing else 0)"
+      # The same check PyPI's upload runs, so a metadata problem shows up before release.
+      - name: Check the package metadata
+        run: uvx --from twine==7.0.0 --with packaging==26.2 twine check --strict dist/*
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
         with:
           name: dist
@@ -50,4 +53,5 @@ jobs:
         with:
           name: dist
           path: dist/
-      - uses: pypa/gh-action-pypi-publish@76f52bc884231f62b9a034ebfe128415bbaabdfc  # v1.12.4
+      # v1.14.x bundles twine 7 and packaging 26, which read the metadata 2.5 that hatchling writes
+      - uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086  # v1.14.3
