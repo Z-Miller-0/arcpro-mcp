@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.4.0 (unreleased)
+## 0.4.0 (2026-11-09)
 
 Easier setup, and the security checks reviewed against ArcGIS Pro 3.7.3.
 
