@@ -2,7 +2,33 @@
 
 ## 0.4.0 (unreleased)
 
-Easier setup. No change to what the bridge can do, or to its security checks.
+Easier setup, and the security checks reviewed against ArcGIS Pro 3.7.3.
+
+### Security: Pro 3.7.3 review
+The list of tools that run Python was built from Pro 3.5. A read-only scan of Pro 3.7.3's 2,198
+tools (their scripts, the modules those import, and every parameter) found tools that could run
+code with `allow_exec` off. They now need `allow_exec`:
+- **Load Data To Preview** runs the same workbook loader, with its Python code block, as Load
+  Data Using Workspace, which was already refused.
+- **Batch Update Fields** runs Python functions from a `.py` file.
+- **Analyze Tools For Pro** loads the Python toolbox or script it analyzes.
+- **Generate Raster Collection** and **Generate Table From Raster Function** take raster
+  functions, which can be Python, like Generate Raster From Raster Function.
+- **Classify Point Cloud Using Trained Model**, **Detect Objects From Point Cloud Using Trained
+  Model**, **Evaluate Point Cloud Classification Model**, **Forecast Using Time Series Model** and
+  **Predict Using AutoML** load model files, which can carry Python. The name pattern for model
+  tools now also catches `...TrainedModel` and `AutoML` tools.
+
+Two broader guards were added:
+- **Any tool** is refused when a parameter names a Python or model file (`.py`, `.pyt`, `.pyc`,
+  `.pyd`, `.dlpk`, `.emd`) or a `PythonAdapter` raster function, including inside value tables
+  and JSON. This covers tools nobody has reviewed, such as the oriented imagery tools'
+  `raster_function` parameter.
+- **Match Layer Symbology To A Style** takes only a plain field name for `match_values`, because
+  its expression language is not documented.
+
+The review found nothing else: the other hits run fixed, internal code, and the expression
+parameters of the attribute rule, COGO, parcel and GeoAnalytics tools are Arcade only.
 
 - **`arcpro-mcp install`** sets everything up in one command. It copies the bridge and toolbox
   to `%LOCALAPPDATA%\arcpro-mcp\bridge`, adds the `arcgis-pro` server to Claude Desktop's config
@@ -20,6 +46,7 @@ Easier setup. No change to what the bridge can do, or to its security checks.
 - **"Bridge not running" names the real path.** The message now gives the toolbox location and
   a ready-to-paste start line for the bridge that matches this server.
 - A release workflow publishes to PyPI from a `v*` tag, through PyPI trusted publishing.
+- Licensed under MIT.
 - Fixed a test that failed now and then on Windows, where a dropped connection can show up as a
   reset rather than a close.
 

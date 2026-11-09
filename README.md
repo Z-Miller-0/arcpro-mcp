@@ -147,8 +147,13 @@ If a request looks odd, deny it.
 - any function that is not a real geoprocessing tool, and the `server`, `agolservices`, `interop`
   toolboxes
 - tools that run Python or load code: CalculateValue, CalculateField and CalculateFields unless
-  they use Arcade or SQL, Raster Calculator, raster function templates, deep learning tools and
-  others. New Pro versions can add more, so this list needs reviewing on upgrades.
+  they use Arcade or SQL, Raster Calculator, raster function tools, Load Data Using Workspace and
+  Load Data To Preview, Batch Update Fields, deep learning and other trained-model tools, and
+  others. The list was checked against Pro 3.5 and 3.7.3. New Pro versions can add more, so it
+  needs reviewing on upgrades.
+- any tool parameter that names a Python or model file (`.py`, `.pyt`, `.dlpk`, `.emd`, ...) or a
+  Python raster function, whatever the tool, so unreviewed tools cannot be handed code that way
+- expressions in Match Layer Symbology To A Style: it takes a plain field name only
 - tools that publish or upload to your portal
 - network paths anywhere in a parameter, because opening one can send your Windows credentials to
   that host
@@ -252,7 +257,7 @@ stored in `%USERPROFILE%\.arcpro_mcp\bridge.json`.
 ## Status
 
 Version 0.4.0. The automated tests run against a simulated arcpy, and the smoke test against real
-ArcGIS Pro 3.5 (Python 3.11). Errors come back to Claude with the Python traceback, which makes
+ArcGIS Pro 3.5 and 3.7.3 (all 277 checks pass on 3.7.3). Errors come back to Claude with the Python traceback, which makes
 them quick to fix. See [CHANGELOG.md](CHANGELOG.md).
 
 Run the tests: `uv run --extra test pytest`.
@@ -264,3 +269,7 @@ Run the tests: `uv run --extra test pytest`.
 2. Merge to `main`, then push a tag: `git tag v0.4.0 && git push origin v0.4.0`.
 3. The `release` workflow tests, builds, checks the wheel carries the bridge, and publishes to
    PyPI through trusted publishing (no token stored in GitHub).
+
+## License
+
+MIT. See [LICENSE](LICENSE). ArcGIS, ArcGIS Pro and arcpy are products of Esri; this project is not affiliated with or endorsed by Esri.

@@ -365,6 +365,87 @@ def test_imports_python_tool_is_refused(env):
     refused(gp(env, "oi.AddImagesFromCustomInputType", ["x"]), "arbitrary Python")
 
 
+# -- found reviewing Pro 3.7.3 ----------------------------------------------------------------
+
+def _fake_tool(monkeypatch, toolbox, name, calls):
+    """Register a stand-in tool on the fake arcpy that records whether it ran."""
+    import types
+    import fake_arcpy as fa
+    suffix = {"ddd": "3d"}.get(toolbox, toolbox)
+    func = fa._tool("%s_%s" % (name, suffix))(lambda *a, **k: calls.append((name, a, k)) or "done")
+    box = getattr(fa, toolbox, None)
+    if box is None:
+        box = types.SimpleNamespace()
+        monkeypatch.setattr(fa, toolbox, box, raising=False)
+    monkeypatch.setattr(box, name, func, raising=False)
+
+
+@pytest.mark.parametrize("toolbox,name", [
+    ("management", "LoadDataToPreview"),  # same WorkbookLoader as LoadDataUsingWorkspace
+    ("management", "BatchUpdateFields"),
+    ("management", "AnalyzeToolsForPro"),
+    ("management", "GenerateRasterCollection"),
+    ("management", "GenerateTableFromRasterFunction"),
+    ("ddd", "ClassifyPointCloudUsingTrainedModel"),
+    ("ddd", "DetectObjectsFromPointCloudUsingTrainedModel"),
+    ("ddd", "EvaluatePointCloudClassificationModel"),
+    ("geoai", "ForecastUsingTimeSeriesModel"),
+    ("geoai", "PredictUsingAutoML"),
+    ("ia", "SegmentUsingTrainedModel"),  # not a real tool: the family pattern catches new ones
+    ("geoai", "ClassifyUsingAutoMLv2"),
+])
+def test_pro_37_python_tools_are_refused(env, monkeypatch, toolbox, name):
+    calls = []
+    _fake_tool(monkeypatch, toolbox, name, calls)
+    refused(gp(env, "%s.%s" % (toolbox, name), ["C:/GIS/cm.gdb/unused_fc"]), "arbitrary Python")
+    assert calls == []
+
+
+@pytest.mark.parametrize("args,kwargs", [
+    (["C:/GIS/cm.gdb/unused_fc", r"C:\models\roads.dlpk"], None),
+    (["C:/GIS/cm.gdb/unused_fc", "C:/models/roads.EMD"], None),
+    (["C:/GIS/cm.gdb/unused_fc", "x"], {"script_file": "C:/GIS/calc.py"}),
+    (["C:/GIS/cm.gdb/unused_fc", [["field", "C:/GIS/tools.pyt"]]], None),  # inside a value table
+    (["C:/GIS/cm.gdb/unused_fc", '{"type": "PythonAdapter", "pythonModule": "x"}'], None),
+    (["C:/GIS/cm.gdb/unused_fc", "x"], {"raster_function": {"f": "C:/rf/custom.py"}}),
+])
+def test_any_tool_refuses_code_and_model_files(env, monkeypatch, args, kwargs):
+    calls = []
+    _fake_tool(monkeypatch, "management", "UnreviewedTool", calls)
+    res = gp(env, "management.UnreviewedTool", args, **({"kwargs": kwargs} if kwargs else {}))
+    refused(res, "Python or model file")
+    assert calls == []
+
+
+def test_code_file_check_ignores_lookalikes(env):
+    bridge = type(env["server"].bridge)
+    for ok in ("C:/GIS/pyramids.gdb/roads", "C:/GIS/data.pyramid", "copy", "C:/GIS/py/roads.shp",
+               "C:/GIS/emdat.gdb/x", "!SHAPE.area!", 3, None):
+        assert bridge._code_value(ok) is None, ok
+    assert bridge._code_value(["a", ["b", {"k": "C:/x/m.dlpk"}]]) == "C:/x/m.dlpk"
+
+
+def test_code_files_work_in_trusted_mode(env, monkeypatch):
+    calls = []
+    _fake_tool(monkeypatch, "management", "UnreviewedTool", calls)
+    monkeypatch.setattr(env["server"].bridge, "allow_exec", True)
+    payload(gp(env, "management.UnreviewedTool", ["C:/GIS/cm.gdb/unused_fc", "C:/GIS/calc.py"]))
+    assert len(calls) == 1
+
+
+def test_match_symbology_takes_only_a_field_name(env, monkeypatch):
+    calls = []
+    _fake_tool(monkeypatch, "management", "MatchLayerSymbologyToAStyle", calls)
+    for expression in ("!TYPE!.upper()", "__import__('os').getpid()", "$feature.TYPE", 7):
+        refused(gp(env, "management.MatchLayerSymbologyToAStyle",
+                   ["REE Deposits", expression, "C:/styles/s.stylx"]), "field name")
+        refused(gp(env, "management.MatchLayerSymbologyToAStyle", ["REE Deposits"],
+                   kwargs={"match_values": expression, "in_style": "C:/styles/s.stylx"}), "field name")
+    assert calls == []
+    payload(gp(env, "management.MatchLayerSymbologyToAStyle", ["REE Deposits", "TYPE", "C:/styles/s.stylx"]))
+    assert len(calls) == 1
+
+
 def test_overwrite_checks_the_name_the_tool_really_writes(env):
     import fake_arcpy as fa
     del fa.SCHEMA_CALLS[:]

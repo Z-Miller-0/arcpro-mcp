@@ -101,18 +101,37 @@ TOOL_NAME_RE = re.compile(r"^[A-Z][A-Za-z0-9]*$")
 
 # Tools that run Python or load code from their parameters. With allow_exec off they are
 # refused. Keyed by the tool's own name (func.__esri_toolname__) in lower case. Found by
-# reading Pro 3.5's Resources\ArcToolBox for eval/exec; review again on Pro upgrades.
+# reading Resources\ArcToolBox for eval/exec and for parameters that take code, Python files,
+# model files or raster functions: Pro 3.5, then again for Pro 3.7.3. Review on Pro upgrades.
 PYTHON_TOOLS = {
     "calculatevalue_management": "evaluates a Python expression and code block",
     "calculatevalue_mb": "evaluates a Python expression and code block",
     "geotaggedphotostopoints_management": "evaluates metadata read from photo files",
     "loaddatausingworkspace_management": "runs a Python code block",
+    "loaddatatopreview_management": "runs the same Python code block as Load Data Using Workspace",
+    "batchupdatefields_management": "runs Python functions from a .py file",
+    "analyzetoolsforpro_management": "loads the Python toolbox or script it analyzes",
     "generaterasterfromrasterfunction_management": "can run Python raster functions",
+    "generaterastercollection_management": "can run Python raster functions",
+    "generatetablefromrasterfunction_management": "can run Python raster functions",
     "rastercalculator_sa": "evaluates a map algebra expression as Python",
     "rastercalculator_ia": "evaluates a map algebra expression as Python",
     "addimagesfromcustominputtype_oi": "imports a Python module from a folder",
+    "classifypointcloudusingtrainedmodel_3d": "loads a model file, which can carry Python",
+    "detectobjectsfrompointcloudusingtrainedmodel_3d": "loads a model file, which can carry Python",
+    "evaluatepointcloudclassificationmodel_3d": "loads a model file, which can carry Python",
+    "forecastusingtimeseriesmodel_geoai": "loads a model file, which can carry Python",
+    "predictusingautoml_geoai": "loads a model file, which can carry Python",
 }
-PYTHON_TOOL_RE = re.compile(r"deeplearning|^train|usingaimodel", re.I)  # model files carry code
+# Tool families that load model files, which carry code. Catches new tools in these families.
+PYTHON_TOOL_RE = re.compile(r"deeplearning|^train|usingaimodel|trainedmodel|automl", re.I)
+# Any tool: a parameter that names a Python or model file, or a Python raster function, can make
+# the tool run that code. This also covers tools nobody has reviewed. Matched anywhere in a
+# string value, because raster functions and value tables can embed such a path.
+CODE_FILE_RE = re.compile(r"\.(py|pyt|pyw|pyc|pyd|dlpk|emd)\b|pythonadapter", re.I)
+# Tools whose parameter may be a field name or an expression in a language the tool does not
+# document. Only a plain field name is let through: (position, keyword).
+FIELD_ONLY_TOOLS = {"matchlayersymbologytoastyle_management": (1, "match_values")}
 # (position, keyword) of expression_type in the tools that accept a Python expression.
 EXPRESSION_TOOLS = {"calculatefield_management": (3, "expression_type"),
                     "calculatefields_management": (1, "expression_type")}
@@ -1411,6 +1430,18 @@ class Bridge(object):
         if PUBLISH_TOOL_RE.search(key.rsplit("_", 1)[0]):
             raise BridgeError("Refused: %s publishes or uploads to your portal under your "
                               "sign-in. %s" % (tool, TRUST_HINT))
+        code = self._code_value(list(args) + list(kwargs.values()))
+        if code is not None:
+            raise BridgeError("Refused: a parameter of %s names a Python or model file, or a "
+                              "Python raster function (%r), and the tool could run its code. %s"
+                              % (tool, _clip(code, 200), TRUST_HINT))
+        if key in FIELD_ONLY_TOOLS:
+            pos, name = FIELD_ONLY_TOOLS[key]
+            value = args[pos] if len(args) > pos else kwargs.get(name)
+            if value is not None and not (isinstance(value, str) and FIELD_NAME_RE.match(value.strip())):
+                raise BridgeError("Refused: %s takes a field name here, got %r. Expressions in "
+                                  "this parameter may be Python, so they need allow_exec, which "
+                                  "only the user can turn on." % (tool, _clip(value, 200)))
         if key in EXPRESSION_TOOLS:
             pos, name = EXPRESSION_TOOLS[key]
             value = args[pos] if len(args) > pos else kwargs.get(name)
@@ -1420,6 +1451,20 @@ class Bridge(object):
                     "is PYTHON3), and you gave %r. Rewrite the expression in Arcade, for example "
                     "\"$feature.TONS * 2\", and pass expression_type=\"ARCADE\". Python expressions "
                     "need allow_exec, which only the user can turn on." % (tool, value))
+
+    @classmethod
+    def _code_value(cls, value):
+        """The first string in a parameter value that names a code or model file, or None."""
+        if isinstance(value, (list, tuple)):
+            for v in value:
+                found = cls._code_value(v)
+                if found is not None:
+                    return found
+        elif isinstance(value, dict):
+            return cls._code_value(list(value.keys()) + list(value.values()))
+        elif isinstance(value, str) and CODE_FILE_RE.search(value):
+            return value
+        return None
 
     def _param_info(self, toolname):
         try:
