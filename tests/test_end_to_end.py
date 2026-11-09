@@ -404,7 +404,7 @@ def test_lock_error_says_do_not_retry(env):
 def test_startup_hint_is_one_line(env):
     """Backlog 3: two-line pastes break in Pro's Python window."""
     from arcpro_mcp import client
-    line = [l for l in client.NOT_RUNNING.splitlines() if "exec(" in l][0]
+    line = [l for l in client.not_running().splitlines() if "exec(" in l][0]
     assert "; start(" in line
     import ast
     ast.parse(line.strip().replace("<path to arcpro-mcp>", "C:/x"))
@@ -694,7 +694,8 @@ def test_client_reports_dropped_connection(env, tmp_path):
 
     threading.Thread(target=accept_and_drop, daemon=True).start()
     state = tmp_path / "bridge.json"
-    state.write_text(json.dumps({"port": srv.getsockname()[1], "token": "t"}))
+    state.write_text(json.dumps({"port": srv.getsockname()[1], "token": "t",
+                                 "bridge_version": client.__version__}))
     old = client.STATE_FILE
     client.STATE_FILE = state
     try:

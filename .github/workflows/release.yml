@@ -1,0 +1,53 @@
+# Publishes to PyPI when a version tag (v0.4.0, ...) is pushed. Uses PyPI trusted publishing,
+# so no API token is stored in GitHub: PyPI trusts this workflow file in this repo, run from the
+# "pypi" environment. Set that up once on pypi.org (see README > Releasing).
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86  # v5.4.2
+      - name: Check the tag matches the version
+        shell: bash
+        run: |
+          version=$(uv run --frozen python -c "import arcpro_mcp; print(arcpro_mcp.__version__)")
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match the package version $version"; exit 1
+          fi
+      - name: Run the tests
+        run: uv run --frozen --extra test pytest -q
+      - name: Build, and check the wheel carries the bridge
+        run: |
+          uv build
+          uv run --frozen python -c "import glob, sys, zipfile; names = zipfile.ZipFile(glob.glob('dist/*.whl')[0]).namelist(); missing = [n for n in ('arcpro_mcp/bridge/arcpro_bridge.py', 'arcpro_mcp/bridge/ArcProMCP.pyt') if n not in names]; sys.exit('wheel is missing %s' % missing if missing else 0)"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: pypi
+    permissions:
+      id-token: write  # for trusted publishing; nothing else
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4.3.0
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@76f52bc884231f62b9a034ebfe128415bbaabdfc  # v1.12.4
