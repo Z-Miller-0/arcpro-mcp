@@ -46,6 +46,7 @@ parameters of the attribute rule, COGO, parcel and GeoAnalytics tools are Arcade
 - **"Bridge not running" names the real path.** The message now gives the toolbox location and
   a ready-to-paste start line for the bridge that matches this server.
 - A release workflow publishes to PyPI from a `v*` tag, through PyPI trusted publishing.
+- Licensed under MIT.
 - Fixed a test that failed now and then on Windows, where a dropped connection can show up as a
   reset rather than a close.
 

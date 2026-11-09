@@ -269,3 +269,7 @@ Run the tests: `uv run --extra test pytest`.
 2. Merge to `main`, then push a tag: `git tag v0.4.0 && git push origin v0.4.0`.
 3. The `release` workflow tests, builds, checks the wheel carries the bridge, and publishes to
    PyPI through trusted publishing (no token stored in GitHub).
+
+## License
+
+MIT. See [LICENSE](LICENSE). ArcGIS, ArcGIS Pro and arcpy are products of Esri; this project is not affiliated with or endorsed by Esri.

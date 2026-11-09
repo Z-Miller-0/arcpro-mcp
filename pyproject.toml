@@ -4,6 +4,8 @@ dynamic = ["version"]
 description = "MCP server that lets Claude work in ArcGIS Pro through a small bridge script"
 readme = "README.md"
 requires-python = ">=3.10"
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [{ name = "Zachary Miller" }]
 keywords = ["mcp", "arcgis", "arcgis-pro", "arcpy", "gis", "claude"]
 classifiers = [
@@ -26,7 +28,7 @@ arcpro-mcp = "arcpro_mcp.server:main"
 test = ["pytest"]
 
 [build-system]
-requires = ["hatchling>=1.25,<2"]
+requires = ["hatchling>=1.27,<2"]  # 1.27 reads the SPDX license and license-files fields
 build-backend = "hatchling.build"
 
 # One version for the package; tests/test_install.py checks the bridge says the same.
@@ -43,4 +45,4 @@ packages = ["src/arcpro_mcp"]
 "bridge/ArcProMCP.pyt" = "arcpro_mcp/bridge/ArcProMCP.pyt"
 
 [tool.hatch.build.targets.sdist]
-include = ["src", "bridge", "tests", "README.md", "CHANGELOG.md", "uv.lock"]
+include = ["src", "bridge", "tests", "README.md", "CHANGELOG.md", "LICENSE", "uv.lock"]
