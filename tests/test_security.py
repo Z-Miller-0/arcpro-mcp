@@ -754,9 +754,9 @@ def _raw(env, payload_bytes, timeout=5):
     st = json.loads(env["state"].read_text())
     s = socket.create_connection(("127.0.0.1", st["port"]), timeout=timeout)
     s.settimeout(timeout)
-    s.sendall(payload_bytes)
     got = b""
     try:
+        s.sendall(payload_bytes)
         while True:
             chunk = s.recv(4096)
             if not chunk:
@@ -764,6 +764,9 @@ def _raw(env, payload_bytes, timeout=5):
             got += chunk
     except socket.timeout:
         return got, False
+    except (ConnectionResetError, ConnectionAbortedError):
+        # Windows resets, rather than closes, a connection dropped with unread data
+        return got, True
     finally:
         s.close()
 

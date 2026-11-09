@@ -28,7 +28,7 @@ import urllib.parse
 
 STATE = os.path.join(os.path.expanduser("~"), ".arcpro_mcp", "bridge.json")
 HERE = os.path.dirname(os.path.abspath(__file__))
-REQUIRED_BRIDGE = "0.3.0"  # the attack cases below are only safe against guards this new
+REQUIRED_BRIDGE = "0.4.0"  # the attack cases below are only safe against guards this new
 TEST_MAP = "arcpro_mcp_test"
 NOWHERE = "arcpro-mcp-test.invalid"  # .invalid never resolves, so no request can leave
 STATES_URL = ("https://services.arcgis.com/P3ePLMYs2RVChkJx/arcgis/rest/services/"

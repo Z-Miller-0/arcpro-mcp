@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.4.0 (unreleased)
+
+Easier setup. No change to what the bridge can do, or to its security checks.
+
+- **`arcpro-mcp install`** sets everything up in one command. It copies the bridge and toolbox
+  to `%LOCALAPPDATA%\arcpro-mcp\bridge`, adds the `arcgis-pro` server to Claude Desktop's config
+  (after a backup, leaving everything else in the file alone), and prints the toolbox path, the
+  one-line start command, and the Claude Code command. `--dry-run` shows what it would do. Run
+  from a source checkout, it points Claude at the checkout instead.
+- **Packaged for PyPI.** The wheel carries the bridge files, so `uvx arcpro-mcp@0.4.0 install`
+  works without cloning the repo. The Claude Desktop entry it writes is pinned to that version,
+  so the server and the bridge copy always come from the same release.
+- **Server and bridge versions must match.** If the bridge running in Pro has a different
+  major.minor version from the server, tool calls stop with a message saying which side to
+  restart, and how, instead of failing in confusing ways. `bridge_status` still answers and now
+  reports `server_version` (and `version_problem` when they differ). Set
+  `ARCPRO_MCP_IGNORE_VERSION=1` to skip the check.
+- **"Bridge not running" names the real path.** The message now gives the toolbox location and
+  a ready-to-paste start line for the bridge that matches this server.
+- A release workflow publishes to PyPI from a `v*` tag, through PyPI trusted publishing.
+- Fixed a test that failed now and then on Windows, where a dropped connection can show up as a
+  reset rather than a close.
+
 ## 0.3.0 (2026-11-06)
 
 A security audit of 0.2.0 found that `allow_exec=False` contained nothing: `run_geoprocessing`

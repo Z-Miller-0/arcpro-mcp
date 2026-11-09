@@ -14,7 +14,7 @@ import anyio
 from mcp.server.fastmcp import FastMCP, Image
 from mcp.types import TextContent, ToolAnnotations
 
-from . import client
+from . import __version__, client
 
 mcp = FastMCP(
     "arcgis-pro",
@@ -56,7 +56,13 @@ async def _call(cmd: str, **params: Any) -> Any:
 @mcp.tool(annotations=PROJECT_READ)
 async def bridge_status() -> dict:
     """Check that ArcGIS Pro is connected. Reports Pro version, live/standalone mode and project path."""
-    return await _call("ping")
+    res = await _call("ping")
+    if isinstance(res, dict):
+        res["server_version"] = __version__
+        problem = client.version_problem(res.get("bridge_version"))
+        if problem:
+            res["version_problem"] = problem
+    return res
 
 
 @mcp.tool(annotations=PROJECT_READ)
@@ -711,8 +717,16 @@ async def run_arcpy(code: str) -> dict:
     return await _call("run_arcpy", code=code)
 
 
-def main() -> None:
-    mcp.run()
+def main(argv: list[str] | None = None) -> None:
+    """With no arguments, serve MCP over stdio (what Claude starts). Otherwise a subcommand,
+    such as `arcpro-mcp install`."""
+    import sys
+    argv = sys.argv[1:] if argv is None else argv
+    if not argv:
+        mcp.run()
+        return
+    from .install import cli
+    sys.exit(cli(argv))
 
 
 if __name__ == "__main__":

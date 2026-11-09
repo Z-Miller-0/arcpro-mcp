@@ -12,72 +12,81 @@ Claude Desktop  --stdio-->  arcpro-mcp server  --localhost JSON-->  bridge scrip
 The bridge only uses the Python standard library plus arcpy, so you do **not** have to
 clone or modify ArcGIS Pro's Python environment.
 
-## Setup (Windows, about 10 minutes)
+## Quick start (Windows, about 2 minutes)
 
-### 1. Install uv (runs the server; it fetches the right Python and packages for you)
-
-In PowerShell:
+**1. Install uv** (it runs the server and fetches the right Python and packages). In PowerShell:
 
 ```powershell
 powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
 ```
 
-### 2. Put this folder somewhere permanent
+**2. Quit Claude Desktop** (tray icon > Quit), open a **new** PowerShell window, and run:
 
-For example `C:\Users\<you>\arcpro-mcp`. The paths below assume that.
+```powershell
+uvx arcpro-mcp@latest install
+```
 
-### 3. Add the server to Claude Desktop
+This copies the bridge to `%LOCALAPPDATA%\arcpro-mcp\bridge`, adds the `arcgis-pro` server to
+Claude Desktop's config (it backs the file up first and changes nothing else in it), and prints
+the exact paths for the next step. Add `--dry-run` to see what it would do first. Using Claude
+Code instead? Add `--no-claude-desktop` and run the `claude mcp add ...` line it prints.
 
-Claude Desktop > Settings > Developer > Edit Config, then add (merge with anything already there):
+**3. Add the toolbox in ArcGIS Pro, once.** In the **Catalog** pane, right-click **Toolboxes >
+Add Toolbox** and pick the `ArcProMCP.pyt` that step 2 printed. Right-click it > **Add To
+Favorites** so every project has it.
+
+**4. Each time you open Pro**, run **Start Bridge** from that toolbox. You should see
+`arcpro-mcp bridge 0.4.0 listening on 127.0.0.1:18760`. Leave *Trusted mode* unticked unless a
+specific job needs it: see **Security** below.
+
+**5. Open Claude Desktop** and ask: "Check the ArcGIS Pro connection and tell me what's in my
+project."
+
+**To update:** run `uvx arcpro-mcp@latest install` again, then restart Claude Desktop and run
+Start Bridge again. The server and the bridge must be the same version. If they are not,
+Claude says which one to restart instead of failing in odd ways.
+
+## More setup details
+
+### Starting the bridge without the toolbox
+
+Paste this into **View > Python window** as **one line** (the Python window mangles
+multi-line pastes). `arcpro-mcp install` prints it with your real path:
+
+```python
+exec(open(r"C:\Users\<you>\AppData\Local\arcpro-mcp\bridge\arcpro_bridge.py").read()); start(allow_exec=False)
+```
+
+**Stop Bridge** and **Bridge Status** are in the toolbox too. Keep the .pyt next to
+`arcpro_bridge.py`.
+
+Only one bridge can use a port. If you see "Port 18760 is already in use", another Pro window is
+running the bridge: stop it there, or pass `port=18761` to `start()`.
+
+### Setting up by hand
+
+`arcpro-mcp install` writes this into Claude Desktop's config (Settings > Developer > Edit
+Config). Paths must be absolute, because Claude Desktop does not use your PATH:
 
 ```json
 {
   "mcpServers": {
     "arcgis-pro": {
-      "command": "C:\\Users\\<you>\\.local\\bin\\uv.exe",
-      "args": ["--directory", "C:\\Users\\<you>\\arcpro-mcp", "run", "--frozen", "arcpro-mcp"]
+      "command": "C:\\Users\\<you>\\.local\\bin\\uvx.exe",
+      "args": ["arcpro-mcp@0.4.0"]
     }
   }
 }
 ```
 
-Fully quit Claude Desktop (tray icon > Quit) and reopen it.
+Claude Code: `claude mcp add --scope user arcgis-pro -- uvx arcpro-mcp@0.4.0`
 
-For Claude Code instead:
+### Running from a source checkout
 
-```powershell
-claude mcp add arcgis-pro -- uv --directory C:\Users\<you>\arcpro-mcp run --frozen arcpro-mcp
-```
-
-(`--frozen` installs exactly the package versions in `uv.lock`.)
-
-### 4. Start the bridge in ArcGIS Pro
-
-**Option A: one line in the Python window.** Open your project, then **View > Python
-window**, and paste this as **one line** (the Python window mangles multi-line pastes;
-change the path if arcpro-mcp is not in Documents):
-
-```python
-exec(open(r"C:\Users\<you>\Documents\arcpro-mcp\bridge\arcpro_bridge.py").read()); start(allow_exec=False)
-```
-
-Leave `allow_exec=False` unless a specific job needs it: see **Security** below.
-
-**Option B: the toolbox (no typing).** In the **Catalog** pane, right-click
-**Toolboxes > Add Toolbox** and pick `bridge\ArcProMCP.pyt`. Right-click it and choose
-**Add To Favorites** so every project has it. Then open **Start Bridge** and click Run.
-**Stop Bridge** and **Bridge Status** are in the same toolbox. Keep the .pyt next to
-`arcpro_bridge.py`.
-
-Either way you should see `bridge 0.3.0 listening on 127.0.0.1:18760 (live mode, run_arcpy ...)`.
-Start it again each time you reopen Pro.
-
-Only one bridge can use a port. If you see "Port 18760 is already in use", another Pro window is
-running the bridge: stop it there, or pass `port=18761` to `start()`.
-
-### 5. Try it
-
-Ask Claude: "Check the ArcGIS Pro connection and tell me what's in my project."
+Clone the repo somewhere permanent, then run `uv run arcpro-mcp install` inside it. From a
+checkout, the installer points Claude at the checkout (`uv --directory <repo> run --frozen
+arcpro-mcp`, with exactly the versions in `uv.lock`) and uses its `bridge` folder in place, so
+your edits are what runs.
 
 ## Tools
 
@@ -218,8 +227,12 @@ stored in `%USERPROFILE%\.arcpro_mcp\bridge.json`.
 - **"Service check failed ... error 499"**: the layer URL needs a sign-in or was retired.
   Ask Claude to find a current one with `search_arcgis_online`.
 
-- **"The ArcGIS Pro bridge is not running"**: run the one-line `exec(...); start(...)` in
-  Pro's Python window, or Start Bridge from the toolbox.
+- **"The ArcGIS Pro bridge is not running"**: run Start Bridge from the toolbox, or the
+  one-line `exec(...); start(...)` in Pro's Python window. The message gives both paths.
+- **"The bridge running in ArcGIS Pro is 0.x, but this arcpro-mcp server is 0.y"**: one side
+  was updated and the other was not. If the bridge is older, run Stop Bridge then Start Bridge
+  (from the toolbox `arcpro-mcp install` printed). If it is newer, fully quit and reopen Claude.
+  `ARCPRO_MCP_IGNORE_VERSION=1` skips the check, at your own risk.
 - **"... did not finish within 120s"** or **"still busy with export_image"**: Pro is stuck
   drawing. Look at Pro: let it finish, or press Esc / pause drawing. If it is frozen,
   restart Pro and the bridge. Hidden layers with broken renderers or huge web services
@@ -230,15 +243,24 @@ stored in `%USERPROFILE%\.arcpro_mcp\bridge.json`.
 - **"Refused: ... is drawn by ..."**: that's the schema guard (see Safety).
 - **Tools time out in live mode**: some arcpy calls may not like being run from the
   bridge's background thread. Use standalone mode, and please note which tool hung.
-- **Server doesn't appear in Claude Desktop**: check the uv.exe path in the config
-  (`where.exe uv` in PowerShell) and look at Settings > Developer for the error log.
+- **Server doesn't appear in Claude Desktop**: make sure Claude Desktop was fully quit, then run
+  `uvx arcpro-mcp@latest install` again (it fixes a wrong uv path). Settings > Developer shows the
+  server's error log.
 - **Portal search shows `signed_in: false`**: sign in to ArcGIS Online in Pro (top-right).
 - Long geoprocessing runs: raise the timeout with env var `ARCPRO_MCP_TIMEOUT` (seconds, default 900).
 
 ## Status
 
-Version 0.3.0. The automated tests run against a simulated arcpy, and the smoke test against real
+Version 0.4.0. The automated tests run against a simulated arcpy, and the smoke test against real
 ArcGIS Pro 3.5 (Python 3.11). Errors come back to Claude with the Python traceback, which makes
 them quick to fix. See [CHANGELOG.md](CHANGELOG.md).
 
 Run the tests: `uv run --extra test pytest`.
+
+### Releasing
+
+1. Set the version in `src/arcpro_mcp/__init__.py` and `BRIDGE_VERSION` in
+   `bridge/arcpro_bridge.py` (a test checks they match, and that CHANGELOG.md has the entry).
+2. Merge to `main`, then push a tag: `git tag v0.4.0 && git push origin v0.4.0`.
+3. The `release` workflow tests, builds, checks the wheel carries the bridge, and publishes to
+   PyPI through trusted publishing (no token stored in GitHub).

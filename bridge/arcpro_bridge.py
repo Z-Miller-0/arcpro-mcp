@@ -57,7 +57,7 @@ import urllib.request
 
 import arcpy
 
-BRIDGE_VERSION = "0.3.0"
+BRIDGE_VERSION = "0.4.0"
 DEFAULT_PORT = 18760
 STATE_DIR = os.path.join(os.path.expanduser("~"), ".arcpro_mcp")
 STATE_FILE = os.path.join(STATE_DIR, "bridge.json")
